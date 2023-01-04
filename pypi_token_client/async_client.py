@@ -1,4 +1,6 @@
+from asyncio import Lock
 from contextlib import asynccontextmanager
+from functools import wraps
 from traceback import print_exc
 from typing import Sequence
 
@@ -20,69 +22,11 @@ from .credentials import PypiCredentials
 from .utils import one_or_none
 
 
-def expect_page(page, expected_url: str):
+def _expect_page(page, expected_url: str):
     if page.url != expected_url:
         raise UnexpectedPageError(
             f"ended up on unexpected page {page.url} (expected {expected_url})"
         )
-
-
-async def handle_login(
-    context, page, credentials: PypiCredentials
-) -> PypiCredentials:
-    if not page.url.startswith("https://pypi.org/account/login/"):
-        print("no login required")
-        return
-    username_input = one_or_none(await page.locator("#username").all())
-    if not username_input:
-        raise UnexpectedContentError("username field not found on login page")
-    password_input = one_or_none(await page.locator("#password").all())
-    if not password_input:
-        raise UnexpectedContentError("password field not found on login page")
-    await username_input.fill(credentials.username)
-    await password_input.fill(credentials.password)
-    async with page.expect_event("domcontentloaded"), page.expect_navigation():
-        print("logging in...")
-        await password_input.press("Enter")
-    if page.url.startswith("https://pypi.org/account/login/"):
-        username_errors_or_none = one_or_none(
-            await page.locator("#username-errors ul li").all()
-        )
-        username_error = (
-            await username_errors_or_none.inner_text()
-            if username_errors_or_none is not None
-            else None
-        )
-        if username_error is not None:
-            raise UsernameError(username_error)
-        password_errors_or_none = one_or_none(
-            await page.locator("#password-errors ul li").all()
-        )
-        password_error = (
-            await password_errors_or_none.inner_text()
-            if password_errors_or_none is not None
-            else None
-        )
-        if password_error is not None:
-            raise PasswordError(password_error)
-    return credentials
-
-
-async def confirm_password(context, page, credentials: PypiCredentials):
-    confirm_heading = one_or_none(
-        await page.get_by_text("Confirm password to continue").all()
-    )
-    if not confirm_heading:
-        print("no password confirmation required")
-        return
-    password_input = one_or_none(await page.locator("#password").all())
-    if not password_input:
-        raise UnexpectedContentError("no password field found")
-        return
-    await password_input.fill(credentials.password)
-    async with page.expect_event("domcontentloaded"), page.expect_navigation():
-        print("confirming password...")
-        await password_input.press("Enter")
 
 
 @asynccontextmanager
@@ -98,70 +42,172 @@ async def context_page_persistent(
         page = pages[0]
         await page.goto(url, wait_until="domcontentloaded")
         if check_url:
-            expect_page(page, url)
+            _expect_page(page, url)
         yield context, page
 
 
-async def list_projects():
-    async with context_page_persistent(
-        "https://pypi.org/manage/projects/"
-    ) as (context, page):
+@asynccontextmanager
+async def async_pypi_token_client(
+    credentials: PypiCredentials, headless: bool = False
+):
+    async with async_playwright() as p:
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir, headless=headless
+        )
+        pages = context.pages
+        assert len(pages) == 1
+        page = pages[0]
+        yield AsyncPypiTokenClientSession(context, page, credentials, headless)
+
+
+def _with_lock(meth):
+    @wraps(meth)
+    async def _with_lock(self, *args, **kwargs):
+        async with self._lock:
+            return await meth(self, *args, **kwargs)
+
+    return _with_lock
+
+
+class AsyncPypiTokenClientSession:
+    def __init__(
+        self,
+        context,
+        page,
+        credentials: PypiCredentials,
+        headless: bool = True,
+    ):
+        self.context = context
+        self.page = page
+        self.credentials = credentials
+        self.headless = headless
+        self._lock = Lock()
+
+    async def _handle_login(self):
+        if not self.page.url.startswith("https://pypi.org/account/login/"):
+            print("no login required")
+            return
+        username_input = one_or_none(
+            await self.page.locator("#username").all()
+        )
+        if not username_input:
+            raise UnexpectedContentError(
+                "username field not found on login page"
+            )
+        password_input = one_or_none(
+            await self.page.locator("#password").all()
+        )
+        if not password_input:
+            raise UnexpectedContentError(
+                "password field not found on login page"
+            )
+        await username_input.fill(self.credentials.username)
+        await password_input.fill(self.credentials.password)
+        async with self.page.expect_event(
+            "domcontentloaded"
+        ), self.page.expect_navigation():
+            print("logging in...")
+            await password_input.press("Enter")
+        if self.page.url.startswith("https://pypi.org/account/login/"):
+            username_errors_or_none = one_or_none(
+                await self.page.locator("#username-errors ul li").all()
+            )
+            username_error = (
+                await username_errors_or_none.inner_text()
+                if username_errors_or_none is not None
+                else None
+            )
+            if username_error is not None:
+                raise UsernameError(username_error)
+            password_errors_or_none = one_or_none(
+                await self.page.locator("#password-errors ul li").all()
+            )
+            password_error = (
+                await password_errors_or_none.inner_text()
+                if password_errors_or_none is not None
+                else None
+            )
+            if password_error is not None:
+                raise PasswordError(password_error)
+        return self.credentials
+
+    async def _confirm_password(self):
+        confirm_heading = one_or_none(
+            await self.page.get_by_text("Confirm password to continue").all()
+        )
+        if not confirm_heading:
+            print("no password confirmation required")
+            return
+        password_input = one_or_none(
+            await self.page.locator("#password").all()
+        )
+        if not password_input:
+            raise UnexpectedContentError("no password field found")
+            return
+        await password_input.fill(self.credentials.password)
+        async with self.page.expect_event(
+            "domcontentloaded"
+        ), self.page.expect_navigation():
+            print("confirming password...")
+            await password_input.press("Enter")
+
+    @_with_lock
+    async def list_projects(self):
+        await self.page.goto(
+            "https://pypi.org/manage/projects/", wait_until="domcontentloaded"
+        )
         project_titles = [
             x.split()[0]
-            for x in await page.locator(
+            for x in await self.page.locator(
                 ".package-snippet__title"
             ).all_inner_texts()
         ]
         print("\n".join(project_titles))
 
-
-@asynccontextmanager
-async def handle_errors(context, headless: bool):
-    try:
-        yield
-    except Exception:
-        print_exc()
-        if headless:
-            print(
-                "If you want to see what exactly went wrong in the browser "
-                "window, rerun with --headful"
-            )
-        else:
+    @asynccontextmanager
+    async def _handle_errors(self):
+        try:
+            yield
+        except Exception:
             print_exc()
-            print(
-                "check browser window for what exactly went wrong "
-                "and close it once done"
-            )
-            await context.wait_for_event("close", timeout=0)
+            if self.headless:
+                print(
+                    "If you want to see what exactly went wrong in the "
+                    "browser window, rerun with --headful"
+                )
+            else:
+                print_exc()
+                print(
+                    "check browser window for what exactly went wrong "
+                    "and close it once done"
+                )
+                await self.context.wait_for_event("close", timeout=0)
 
+    async def login(self):
+        await self.page.goto(
+            "https://pypi.org/manage/account/", wait_until="domcontentloaded"
+        )
+        async with self._handle_errors():
+            await self._handle_login()
 
-async def login(
-    credentials: PypiCredentials, headless: bool = True
-) -> Sequence[TokenListEntry]:
-    async with context_page_persistent(
-        "https://pypi.org/manage/account/", headless=headless
-    ) as (context, page):
-        async with handle_errors(context, headless):
-            await handle_login(context, page, credentials)
-
-
-async def create_project_token(
-    project_name: str,
-    token_name: str,
-    credentials: PypiCredentials,
-    headless: bool = True,
-) -> str:
-    async with context_page_persistent(
-        "https://pypi.org/manage/account/token/", headless=headless
-    ) as (context, page):
-        async with handle_errors(context, headless):
+    @_with_lock
+    async def create_project_token(
+        self,
+        project_name: str,
+        token_name: str,
+    ) -> str:
+        await self.page.goto(
+            "https://pypi.org/manage/account/token/",
+            wait_until="domcontentloaded",
+        )
+        async with self._handle_errors():
             # login if necessary
-            await handle_login(context, page, credentials)
+            await self._handle_login()
             # confirm password if necessary
-            await confirm_password(context, page, credentials)
+            await self._confirm_password()
             # fill in token name field
             token_name_input = one_or_none(
-                await page.locator("#description").all()
+                await self.page.locator("#description").all()
             )
             if token_name_input is None:
                 raise UnexpectedContentError(
@@ -170,20 +216,20 @@ async def create_project_token(
             await token_name_input.fill(token_name)
             # select token scope => project only
             scope_selector = one_or_none(
-                await page.locator("#token_scope").all()
+                await self.page.locator("#token_scope").all()
             )
             if scope_selector is None:
                 raise UnexpectedContentError("no scope selector found on page")
             await scope_selector.select_option(
                 value=f"scope:project:{project_name}"
             )
-            async with page.expect_event(
+            async with self.page.expect_event(
                 "domcontentloaded"
-            ), page.expect_navigation():
+            ), self.page.expect_navigation():
                 print("creating token...")
                 await token_name_input.press("Enter")
             token_name_errors_or_none = one_or_none(
-                await page.locator("#token-name-errors ul li").all()
+                await self.page.locator("#token-name-errors ul li").all()
             )
             token_name_error = (
                 await token_name_errors_or_none.inner_text()
@@ -193,27 +239,25 @@ async def create_project_token(
             if token_name_error is not None:
                 raise TokenNameError(token_name_error)
             token_block = one_or_none(
-                await page.locator("#provisioned-key > code").all()
+                await self.page.locator("#provisioned-key > code").all()
             )
             if not token_block:
                 raise UnexpectedContentError("no token block found on page")
             token = await token_block.inner_text()
             return token
 
-
-async def get_token_list(
-    credentials: PypiCredentials, headless: bool = True
-) -> Sequence[TokenListEntry]:
-    async with context_page_persistent(
-        "https://pypi.org/manage/account/", headless=headless
-    ) as (context, page):
-        async with handle_errors(context, headless):
+    async def get_token_list(self) -> Sequence[TokenListEntry]:
+        await self.page.goto(
+            "https://pypi.org/manage/account/",
+            wait_until="domcontentloaded",
+        )
+        async with self._handle_errors():
             # login if necessary
-            await handle_login(context, page, credentials)
+            await self._handle_login()
             # confirm password if necessary
-            await confirm_password(context, page, credentials)
+            await self._confirm_password()
             # get list
-            token_rows = await page.locator(
+            token_rows = await self.page.locator(
                 "#api-tokens > table > tbody > tr"
             ).all()
             token_list = []

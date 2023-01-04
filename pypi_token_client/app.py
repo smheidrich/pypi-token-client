@@ -5,6 +5,7 @@ from pprint import pprint
 from . import sync_client
 from .common import LoginError
 from .credentials import (
+    PypiCredentials,
     get_credentials_from_keyring,
     prompt_for_credentials,
     save_credentials_to_keyring,
@@ -22,7 +23,7 @@ def prompt_credentials_on_login_fail(f, /):
         last_exc = Exception()  # dummy
         for _ in range(max_login_attempts):
             try:
-                f(*args, **kwargs)
+                f(*args, credentials=credentials, **kwargs)
                 # TODO this sucks because other exceptions prevent saving
                 # creds... better would be to get a signal back that login
                 # succeeded
@@ -41,24 +42,23 @@ def prompt_credentials_on_login_fail(f, /):
 
 @prompt_credentials_on_login_fail
 def create_token(
+    credentials: PypiCredentials,
     project: str,
     token_name: str | None = None,
-    headless: bool = False,
+    headless: bool = True,
 ):
     token_name = token_name or f"a{date.today()}"
     token = sync_client.create_project_token(
         project,
         token_name,
-        credentials=get_credentials_from_keyring(),
-        headless=headless,
+        credentials,
+        headless,
     )
     print("Created token:")
     print(token)
 
 
 @prompt_credentials_on_login_fail
-def list_tokens(headless):
-    tokens = sync_client.get_token_list(
-        credentials=get_credentials_from_keyring(), headless=headless
-    )
+def list_tokens(credentials: PypiCredentials, headless: bool = True):
+    tokens = sync_client.get_token_list(credentials, headless)
     pprint(tokens)
