@@ -134,19 +134,6 @@ class AsyncPypiTokenClientSession:
             print("confirming password...")
             await password_input.press("Enter")
 
-    @_with_lock
-    async def list_projects(self):
-        await self.page.goto(
-            "https://pypi.org/manage/projects/", wait_until="domcontentloaded"
-        )
-        project_titles = [
-            x.split()[0]
-            for x in await self.page.locator(
-                ".package-snippet__title"
-            ).all_inner_texts()
-        ]
-        print("\n".join(project_titles))
-
     @asynccontextmanager
     async def _handle_errors(self):
         try:
@@ -165,13 +152,6 @@ class AsyncPypiTokenClientSession:
                     "and close it once done"
                 )
                 await self.context.wait_for_event("close", timeout=0)
-
-    async def login(self):
-        await self.page.goto(
-            "https://pypi.org/manage/account/", wait_until="domcontentloaded"
-        )
-        async with self._handle_errors():
-            await self._handle_login()
 
     @_with_lock
     async def create_project_token(
@@ -229,6 +209,7 @@ class AsyncPypiTokenClientSession:
             token = await token_block.inner_text()
             return token
 
+    @_with_lock
     async def get_token_list(self) -> Sequence[TokenListEntry]:
         await self.page.goto(
             "https://pypi.org/manage/account/",
