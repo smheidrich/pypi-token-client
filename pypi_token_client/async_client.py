@@ -30,23 +30,6 @@ def _expect_page(page, expected_url: str):
 
 
 @asynccontextmanager
-async def context_page_persistent(
-    url: str, headless: bool = True, check_url: bool = False
-):
-    async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
-            user_data_dir, headless=headless
-        )
-        pages = context.pages
-        assert len(pages) == 1
-        page = pages[0]
-        await page.goto(url, wait_until="domcontentloaded")
-        if check_url:
-            _expect_page(page, url)
-        yield context, page
-
-
-@asynccontextmanager
 async def async_pypi_token_client(
     credentials: PypiCredentials, headless: bool = False
 ):
