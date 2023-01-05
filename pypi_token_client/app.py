@@ -48,17 +48,14 @@ def create_token(
     headless: bool = True,
 ):
     token_name = token_name or f"a{date.today()}"
-    token = sync_client.create_project_token(
-        project,
-        token_name,
-        credentials,
-        headless,
-    )
+    with sync_client.sync_pypi_token_client(credentials, headless) as session:
+        token = session.create_project_token(project, token_name)
     print("Created token:")
     print(token)
 
 
 @prompt_credentials_on_login_fail
 def list_tokens(credentials: PypiCredentials, headless: bool = True):
-    tokens = sync_client.get_token_list(credentials, headless)
+    with sync_client.sync_pypi_token_client(credentials, headless) as session:
+        tokens = session.get_token_list(credentials, headless)
     pprint(tokens)

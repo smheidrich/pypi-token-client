@@ -41,6 +41,9 @@ async def async_pypi_token_client(
         assert len(pages) == 1
         page = pages[0]
         yield AsyncPypiTokenClientSession(context, page, credentials, headless)
+        # XXX after this point it freezes forever in this line:
+        # File "/usr/lib/python3.10/asyncio/runners.py", line 48, in run
+        #   loop.run_until_complete(loop.shutdown_asyncgens())
 
 
 def _with_lock(meth):
