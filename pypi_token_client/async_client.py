@@ -1,6 +1,7 @@
 from asyncio import Lock
 from contextlib import asynccontextmanager
 from functools import wraps
+from pathlib import Path
 from traceback import print_exc
 from typing import Sequence
 
@@ -16,7 +17,6 @@ from .common import (
     UnexpectedContentError,
     UnexpectedPageError,
     UsernameError,
-    user_data_dir,
 )
 from .credentials import PypiCredentials
 from .utils import one_or_none
@@ -29,14 +29,33 @@ def _expect_page(page, expected_url: str):
         )
 
 
+async def launch_ephemeral_chromium_context(p, headless: bool = True):
+    """
+    Ephemeral version of Playwright's chromium.launch_persistent_context.
+
+    No idea why they didn't just include that themselves...
+    """
+    browser = await p.chromium.launch()
+    context = await browser.new_context()
+    await context.new_page()
+    return context
+
+
 @asynccontextmanager
 async def async_pypi_token_client(
-    credentials: PypiCredentials, headless: bool = False
+    credentials: PypiCredentials,
+    headless: bool = False,
+    persist_to: Path | str | None = None,
 ):
     async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
-            user_data_dir, headless=headless
-        )
+        if persist_to is None:
+            context = await launch_ephemeral_chromium_context(
+                p, headless=headless
+            )
+        else:
+            context = await p.chromium.launch_persistent_context(
+                Path(persist_to), headless=headless
+            )
         pages = context.pages
         assert len(pages) == 1
         page = pages[0]

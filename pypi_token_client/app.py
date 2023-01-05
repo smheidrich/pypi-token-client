@@ -1,5 +1,6 @@
 from datetime import date
 from functools import wraps
+from pathlib import Path
 from pprint import pprint
 
 from . import sync_client
@@ -46,19 +47,21 @@ def create_token(
     project: str,
     token_name: str | None = None,
     headless: bool = True,
+    persist_to: Path | None = None,
 ):
     token_name = token_name or f"a{date.today()}"
     token = sync_client.create_project_token(
-        project,
-        token_name,
-        credentials,
-        headless,
+        project, token_name, credentials, headless, persist_to
     )
     print("Created token:")
     print(token)
 
 
 @prompt_credentials_on_login_fail
-def list_tokens(credentials: PypiCredentials, headless: bool = True):
-    tokens = sync_client.get_token_list(credentials, headless)
+def list_tokens(
+    credentials: PypiCredentials,
+    headless: bool = True,
+    persist_to: Path | None = None,
+):
+    tokens = sync_client.get_token_list(credentials, headless, persist_to)
     pprint(tokens)
