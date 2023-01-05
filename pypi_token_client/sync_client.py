@@ -7,19 +7,21 @@ here too but to no avail:
 https://gitlab.com/smheidrich/pypi-token-client/-/merge_requests/1
 """
 import asyncio
+from typing import Sequence
 
 from . import async_client
-from .credentials import PypiCredentials
+from .common import TokenListEntry
+from .credentials import CredentialsProvider
 
 
 async def _create_project_token_async(
     project_name: str,
     token_name: str,
-    credentials: PypiCredentials,
+    credentials_provider: CredentialsProvider,
     headless: bool,
-):
+) -> str:
     async with async_client.async_pypi_token_client(
-        credentials, headless
+        credentials_provider, headless
     ) as session:
         return await session.create_project_token(project_name, token_name)
 
@@ -27,25 +29,29 @@ async def _create_project_token_async(
 def create_project_token(
     project: str,
     token_name: str,
-    credentials: PypiCredentials,
+    credentials_provider: CredentialsProvider,
     headless: bool = False,
-):
+) -> str:
     return asyncio.run(
         _create_project_token_async(
-            project, token_name, credentials, headless=headless
+            project, token_name, credentials_provider, headless=headless
         )
     )
 
 
 async def _get_token_list_async(
-    credentials: PypiCredentials,
+    credentials_provider: CredentialsProvider,
     headless: bool,
-):
+) -> Sequence[TokenListEntry]:
     async with async_client.async_pypi_token_client(
-        credentials, headless
+        credentials_provider, headless
     ) as session:
         return await session.get_token_list()
 
 
-def get_token_list(credentials: PypiCredentials, headless: bool = False):
-    return asyncio.run(_get_token_list_async(credentials, headless=headless))
+def get_token_list(
+    credentials_provider: CredentialsProvider, headless: bool = False
+) -> Sequence[TokenListEntry]:
+    return asyncio.run(
+        _get_token_list_async(credentials_provider, headless=headless)
+    )

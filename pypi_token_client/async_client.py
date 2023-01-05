@@ -18,7 +18,7 @@ from .common import (
     UsernameError,
     user_data_dir,
 )
-from .credentials import PypiCredentials
+from .credentials import CredentialsProvider
 from .utils import one_or_none
 
 
@@ -31,7 +31,7 @@ def _expect_page(page, expected_url: str):
 
 @asynccontextmanager
 async def async_pypi_token_client(
-    credentials: PypiCredentials, headless: bool = False
+    credentials_provider: CredentialsProvider, headless: bool = False
 ):
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
@@ -40,7 +40,9 @@ async def async_pypi_token_client(
         pages = context.pages
         assert len(pages) == 1
         page = pages[0]
-        yield AsyncPypiTokenClientSession(context, page, credentials, headless)
+        yield AsyncPypiTokenClientSession(
+            context, page, credentials_provider, headless
+        )
 
 
 def _with_lock(meth):
@@ -57,41 +59,45 @@ class AsyncPypiTokenClientSession:
         self,
         context,
         page,
-        credentials: PypiCredentials,
+        credentials_provider: CredentialsProvider,
         headless: bool = True,
     ):
         self.context = context
         self.page = page
-        self.credentials = credentials
+        self.credentials_provider = credentials_provider
         self.headless = headless
         self._lock = Lock()
 
-    async def _handle_login(self):
+    async def _handle_login(self) -> None:
         if not self.page.url.startswith("https://pypi.org/account/login/"):
             print("no login required")
             return
-        username_input = one_or_none(
-            await self.page.locator("#username").all()
-        )
-        if not username_input:
-            raise UnexpectedContentError(
-                "username field not found on login page"
+        credentials = self.credentials_provider.get_credentials()
+        while True:
+            username_input = one_or_none(
+                await self.page.locator("#username").all()
             )
-        password_input = one_or_none(
-            await self.page.locator("#password").all()
-        )
-        if not password_input:
-            raise UnexpectedContentError(
-                "password field not found on login page"
+            if not username_input:
+                raise UnexpectedContentError(
+                    "username field not found on login page"
+                )
+            password_input = one_or_none(
+                await self.page.locator("#password").all()
             )
-        await username_input.fill(self.credentials.username)
-        await password_input.fill(self.credentials.password)
-        async with self.page.expect_event(
-            "domcontentloaded"
-        ), self.page.expect_navigation():
-            print("logging in...")
-            await password_input.press("Enter")
-        if self.page.url.startswith("https://pypi.org/account/login/"):
+            if not password_input:
+                raise UnexpectedContentError(
+                    "password field not found on login page"
+                )
+            await username_input.fill(credentials.username)
+            await password_input.fill(credentials.password)
+            async with self.page.expect_event(
+                "domcontentloaded"
+            ), self.page.expect_navigation():
+                print("logging in...")
+                await password_input.press("Enter")
+            if not self.page.url.startswith("https://pypi.org/account/login/"):
+                self.credentials_provider.hint_valid_credentials(credentials)
+                return
             username_errors_or_none = one_or_none(
                 await self.page.locator("#username-errors ul li").all()
             )
@@ -101,7 +107,14 @@ class AsyncPypiTokenClientSession:
                 else None
             )
             if username_error is not None:
-                raise UsernameError(username_error)
+                new_credentials = (
+                    self.credentials_provider.re_request_invalid_credentials(
+                        credentials
+                    )
+                )
+                if new_credentials is None:
+                    raise UsernameError(username_error)
+                credentials = new_credentials
             password_errors_or_none = one_or_none(
                 await self.page.locator("#password-errors ul li").all()
             )
@@ -111,8 +124,15 @@ class AsyncPypiTokenClientSession:
                 else None
             )
             if password_error is not None:
-                raise PasswordError(password_error)
-        return self.credentials
+                new_credentials = (
+                    self.credentials_provider.re_request_invalid_credentials(
+                        credentials, username_valid=True
+                    )
+                )
+                if new_credentials is None:
+                    raise PasswordError(password_error)
+                credentials = new_credentials
+            assert False, "should never get here"
 
     async def _confirm_password(self):
         confirm_heading = one_or_none(
@@ -127,7 +147,7 @@ class AsyncPypiTokenClientSession:
         if not password_input:
             raise UnexpectedContentError("no password field found")
             return
-        await password_input.fill(self.credentials.password)
+        await password_input.fill(credentials.password)
         async with self.page.expect_event(
             "domcontentloaded"
         ), self.page.expect_navigation():
