@@ -85,10 +85,39 @@ class AsyncPypiTokenClientSession:
         self.headless = headless
         self._lock = Lock()
 
-    async def _handle_login(self):
+    async def _get_logged_in_user(self) -> str | None:
+        user_button = one_or_none(
+            await self.page.locator(
+                "#user-indicator > nav:first-child > button"
+            ).all()
+        )
+        if user_button is None:
+            return None
+        username = await user_button.inner_text()
+        return username
+
+    async def _handle_login(self) -> bool:
+        """
+        Automatically handle login if necessary, otherwise do nothing.
+
+        Returns:
+            `True` if a login was actually performed, `False` if nothing was
+            done.
+        """
+        logged_in_user = await self._get_logged_in_user()
+        if logged_in_user is not None:
+            if logged_in_user == self.credentials.username:
+                print("no login required")
+                return False
+            else:
+                # TODO log out & go to login page
+                raise NotImplementedError(
+                    "logged-in user doesn't match credential username, "
+                    "which can't be handled yet"
+                )
         if not self.page.url.startswith("https://pypi.org/account/login/"):
             print("no login required")
-            return
+            return False
         username_input = one_or_none(
             await self.page.locator("#username").all()
         )
@@ -131,7 +160,7 @@ class AsyncPypiTokenClientSession:
             )
             if password_error is not None:
                 raise PasswordError(password_error)
-        return self.credentials
+        return True
 
     async def _confirm_password(self):
         confirm_heading = one_or_none(
@@ -227,6 +256,32 @@ class AsyncPypiTokenClientSession:
                 raise UnexpectedContentError("no token block found on page")
             token = await token_block.inner_text()
             return token
+
+    @_with_lock
+    async def login(self) -> bool:
+        """
+        Log into PyPI if necessary.
+
+        Normally, this does not need to be called explicitly as all other
+        functions of this class perform logins automatically.
+
+        One use case for this is to find out whether the given credentials are
+        correct without doing anything else. It should however be noted that an
+        actual login will only be performed when necessary, i.e. when the
+        session's current state (resulting from loaded persistent browser state
+        or prior actions) isn't already logged in.
+
+        Returns:
+            `True` if a login was actually performed, `False` if nothing was
+            done.
+        """
+        await self.page.goto(
+            "https://pypi.org/account/login/",
+            wait_until="domcontentloaded",
+        )
+        async with self._handle_errors():
+            # login if necessary
+            return await self._handle_login()
 
     @_with_lock
     async def get_token_list(self) -> Sequence[TokenListEntry]:
