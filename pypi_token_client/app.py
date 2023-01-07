@@ -1,9 +1,12 @@
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date
-from functools import wraps
+from itertools import count
 from pathlib import Path
 from pprint import pprint
 
-from . import sync_client
+from .async_client import AsyncPypiTokenClientSession, async_pypi_token_client
 from .common import LoginError
 from .credentials import (
     PypiCredentials,
@@ -15,53 +18,73 @@ from .credentials import (
 max_login_attempts = 3
 
 
-def prompt_credentials_on_login_fail(f, /):
-    @wraps(f)
-    def _prompt_credentials_on_login_fail(*args, **kwargs):
+@asynccontextmanager
+async def logged_in_session(
+    credentials: PypiCredentials | None,
+    headless: bool,
+    persist_to: Path | None,
+) -> AsyncIterator[AsyncPypiTokenClientSession]:
+    credentials_are_new = False
+    if credentials is None:
         credentials = get_credentials_from_keyring()
-        if not credentials:
-            credentials = prompt_for_credentials()
-        last_exc = Exception()  # dummy
-        for _ in range(max_login_attempts):
+    if credentials is None:
+        credentials = prompt_for_credentials()
+        credentials_are_new = True
+    async with async_pypi_token_client(
+        credentials, headless, persist_to
+    ) as session:
+        for attempt in count():
             try:
-                f(*args, credentials=credentials, **kwargs)
-                # TODO this sucks because other exceptions prevent saving
-                # creds... better would be to get a signal back that login
-                # succeeded
-                save_credentials_to_keyring(credentials)
+                did_login = await session.login()
+                if did_login and credentials_are_new:
+                    save = input(
+                        "success! save credentials to keyring (Y/n)? "
+                    )
+                    if save == "Y":
+                        save_credentials_to_keyring(credentials)
+                        print("saved")
+                    else:
+                        print("not saving")
                 break
             except LoginError as e:
                 print(f"Login failed: {e}")
-                last_exc = e
+                if attempt >= max_login_attempts:
+                    print("Giving up.")
+                    raise
                 credentials = prompt_for_credentials()
-        else:
-            print("Giving up.")
-            raise last_exc from last_exc
-
-    return _prompt_credentials_on_login_fail
+                credentials_are_new = True
+        yield session
 
 
-@prompt_credentials_on_login_fail
 def create_token(
-    credentials: PypiCredentials,
     project: str,
     token_name: str | None = None,
     headless: bool = True,
     persist_to: Path | None = None,
-):
-    token_name = token_name or f"a{date.today()}"
-    token = sync_client.create_project_token(
-        project, token_name, credentials, headless, persist_to
-    )
-    print("Created token:")
-    print(token)
+    credentials: PypiCredentials | None = None,
+) -> None:
+    async def _run():
+        token_name_ = token_name or f"a{date.today()}"
+        async with logged_in_session(
+            credentials, headless, persist_to
+        ) as session:
+            token = await session.create_project_token(project, token_name_)
+        print("Created token:")
+        print(token)
+
+    asyncio.run(_run())
 
 
-@prompt_credentials_on_login_fail
 def list_tokens(
-    credentials: PypiCredentials,
     headless: bool = True,
     persist_to: Path | None = None,
-):
-    tokens = sync_client.get_token_list(credentials, headless, persist_to)
-    pprint(tokens)
+    credentials: PypiCredentials | None = None,
+) -> None:
+    async def _run():
+        async with logged_in_session(
+            credentials, headless, persist_to
+        ) as session:
+            tokens = await session.get_token_list()
+        pprint(tokens)
+
+    asyncio.run(_run())
