@@ -92,6 +92,23 @@ def list_tokens(ctx: typer.Context):
     )
 
 
+@cli_app.command()
+def delete(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="name of token to delete"),
+):
+    """
+    Delete token on PyPI
+    """
+    app.delete_token(
+        name=name,
+        headless=ctx.obj.headless,
+        persist_to=ctx.obj.persist_to,
+        username=ctx.obj.username,
+        password=ctx.obj.password,
+    )
+
+
 def cli_main():
     cli_app()
 
