@@ -5,6 +5,7 @@ from datetime import date
 from itertools import count
 from pathlib import Path
 from pprint import pprint
+from traceback import print_exc
 
 from .async_client import AsyncPypiTokenClientSession, async_pypi_token_client
 from .common import PasswordError, UsernameError
@@ -58,6 +59,27 @@ async def logged_in_session(
         yield session
 
 
+@asynccontextmanager
+async def handle_errors(session: AsyncPypiTokenClientSession):
+    try:
+        yield
+    except Exception:
+        print_exc()
+        if session.headless:
+            print(
+                "If you want to see what exactly went wrong by looking at the "
+                "browser window, rerun in non-headless mode"
+            )
+        else:
+            print_exc()
+            print(
+                "check browser window for what exactly went wrong "
+                "and close it once done"
+            )
+            await session.wait_until_closed()
+        exit(1)
+
+
 def create_token(
     project: str,
     token_name: str | None = None,
@@ -70,7 +92,7 @@ def create_token(
         token_name_ = token_name or f"a{date.today()}"
         async with logged_in_session(
             username, password, headless, persist_to
-        ) as session:
+        ) as session, handle_errors(session):
             token = await session.create_project_token(project, token_name_)
         print("Created token:")
         print(token)
@@ -87,7 +109,7 @@ def list_tokens(
     async def _run():
         async with logged_in_session(
             username, password, headless, persist_to
-        ) as session:
+        ) as session, handle_errors(session):
             tokens = await session.get_token_list()
         pprint(tokens)
 
@@ -104,7 +126,7 @@ def delete_token(
     async def _run():
         async with logged_in_session(
             username, password, headless, persist_to
-        ) as session:
+        ) as session, handle_errors(session):
             await session.delete_token(name)
 
     asyncio.run(_run())
