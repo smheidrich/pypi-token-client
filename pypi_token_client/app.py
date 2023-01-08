@@ -24,7 +24,10 @@ async def logged_in_session(
     headless: bool,
     persist_to: Path | None,
 ) -> AsyncIterator[AsyncPypiTokenClientSession]:
-    credentials_are_new = False
+    # don't do anything interactive (e.g. ask about saving to keyring or retry
+    # with prompt) if both username and password are provided (generally
+    # suggests no interactivity is desired)
+    interactive = username is None or password is None
     credentials, credentials_are_new = get_credentials_from_keyring_and_prompt(
         username, password
     )
@@ -34,7 +37,7 @@ async def logged_in_session(
         for attempt in count():
             try:
                 did_login = await session.login()
-                if did_login and credentials_are_new:
+                if did_login and credentials_are_new and interactive:
                     save = input(
                         "success! save credentials to keyring (Y/n)? "
                     )
@@ -46,7 +49,7 @@ async def logged_in_session(
                 break
             except (UsernameError, PasswordError) as e:
                 print(f"Login failed: {e}")
-                if attempt >= max_login_attempts:
+                if attempt >= max_login_attempts or not interactive:
                     print("Giving up.")
                     raise
                 credentials = prompt_for_credentials()
