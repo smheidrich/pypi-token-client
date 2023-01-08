@@ -7,10 +7,9 @@ from pathlib import Path
 from pprint import pprint
 
 from .async_client import AsyncPypiTokenClientSession, async_pypi_token_client
-from .common import LoginError
+from .common import PasswordError, UsernameError
 from .credentials import (
-    PypiCredentials,
-    get_credentials_from_keyring,
+    get_credentials_from_keyring_and_prompt,
     prompt_for_credentials,
     save_credentials_to_keyring,
 )
@@ -20,16 +19,15 @@ max_login_attempts = 3
 
 @asynccontextmanager
 async def logged_in_session(
-    credentials: PypiCredentials | None,
+    username: str | None,
+    password: str | None,
     headless: bool,
     persist_to: Path | None,
 ) -> AsyncIterator[AsyncPypiTokenClientSession]:
     credentials_are_new = False
-    if credentials is None:
-        credentials = get_credentials_from_keyring()
-    if credentials is None:
-        credentials = prompt_for_credentials()
-        credentials_are_new = True
+    credentials, credentials_are_new = get_credentials_from_keyring_and_prompt(
+        username, password
+    )
     async with async_pypi_token_client(
         credentials, headless, persist_to
     ) as session:
@@ -46,13 +44,14 @@ async def logged_in_session(
                     else:
                         print("not saving")
                 break
-            except LoginError as e:
+            except (UsernameError, PasswordError) as e:
                 print(f"Login failed: {e}")
                 if attempt >= max_login_attempts:
                     print("Giving up.")
                     raise
                 credentials = prompt_for_credentials()
                 credentials_are_new = True
+                session.credentials = credentials
         yield session
 
 
@@ -61,12 +60,13 @@ def create_token(
     token_name: str | None = None,
     headless: bool = True,
     persist_to: Path | None = None,
-    credentials: PypiCredentials | None = None,
+    username: str | None = None,
+    password: str | None = None,
 ) -> None:
     async def _run():
         token_name_ = token_name or f"a{date.today()}"
         async with logged_in_session(
-            credentials, headless, persist_to
+            username, password, headless, persist_to
         ) as session:
             token = await session.create_project_token(project, token_name_)
         print("Created token:")
@@ -78,11 +78,12 @@ def create_token(
 def list_tokens(
     headless: bool = True,
     persist_to: Path | None = None,
-    credentials: PypiCredentials | None = None,
+    username: str | None = None,
+    password: str | None = None,
 ) -> None:
     async def _run():
         async with logged_in_session(
-            credentials, headless, persist_to
+            username, password, headless, persist_to
         ) as session:
             tokens = await session.get_token_list()
         pprint(tokens)

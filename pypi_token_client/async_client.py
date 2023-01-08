@@ -14,6 +14,7 @@ from .common import (
     SingleProject,
     TokenListEntry,
     TokenNameError,
+    TooManyAttemptsError,
     UnexpectedContentError,
     UnexpectedPageError,
     UsernameError,
@@ -35,7 +36,7 @@ async def launch_ephemeral_chromium_context(p, headless: bool = True):
 
     No idea why they didn't just include that themselves...
     """
-    browser = await p.chromium.launch()
+    browser = await p.chromium.launch(headless=headless)
     context = await browser.new_context()
     await context.new_page()
     return context
@@ -159,7 +160,10 @@ class AsyncPypiTokenClientSession:
                 else None
             )
             if password_error is not None:
-                raise PasswordError(password_error)
+                if "too many unsuccessful login attempts" in password_error:
+                    raise TooManyAttemptsError(password_error)
+                else:
+                    raise PasswordError(password_error)
         return True
 
     async def _confirm_password(self):
@@ -191,7 +195,7 @@ class AsyncPypiTokenClientSession:
             if self.headless:
                 print(
                     "If you want to see what exactly went wrong in the "
-                    "browser window, rerun with --headful"
+                    "browser window, rerun in non-headless mode"
                 )
             else:
                 print_exc()
@@ -200,6 +204,7 @@ class AsyncPypiTokenClientSession:
                     "and close it once done"
                 )
                 await self.context.wait_for_event("close", timeout=0)
+            raise
 
     @_with_lock
     async def create_project_token(
