@@ -5,28 +5,56 @@ import typer
 
 from . import app
 
-cli_app = typer.Typer()
+cli_app = typer.Typer(
+    context_settings={
+        "auto_envvar_prefix": "PYPITOKENCLIENT",
+    }
+)
 
 
 @dataclass
 class TyperState:
-    headful: bool
+    headless: bool
     persist_to: Path | None
+    username: str | None
+    password: str | None
 
 
 @cli_app.callback()
 def typer_callback(
     ctx: typer.Context,
-    headful: bool = typer.Option(
-        False, help="display browser window (i.e. no-headless mode)"
+    headless: bool = typer.Option(
+        True,
+        help="whether to run the broswer in headless mode "
+        "(note that in non-headless mode, it will wait for you to inspect "
+        "the situation and close it manually when an error happens)",
     ),
     persist_to: str = typer.Option(
         None,
-        help="persist browser state to directory (default is no persistence)",
+        "--persist",
+        metavar="PATH",
+        help="persist browser state to directory (no persistence if not set)",
+    ),
+    username: str = typer.Option(
+        None,
+        "--username",
+        "-u",
+        help="PyPI username (will prompt for it if not given)",
+    ),
+    password: str = typer.Option(
+        None,
+        help="PyPI password "
+        "(will prompt for it or load it from the keyring if not given); "
+        "you should probably NOT set this via the CLI because it "
+        "will then be visible in the list of processes; "
+        "it's safer to provide it as an env var",
     ),
 ):
     ctx.obj = TyperState(
-        headful, Path(persist_to) if persist_to is not None else None
+        headless,
+        Path(persist_to) if persist_to is not None else None,
+        username,
+        password,
     )
 
 
@@ -44,8 +72,10 @@ def create(
     app.create_token(
         project=project,
         token_name=token_name,
-        headless=not ctx.obj.headful,
+        headless=ctx.obj.headless,
         persist_to=ctx.obj.persist_to,
+        username=ctx.obj.username,
+        password=ctx.obj.password,
     )
 
 
@@ -55,7 +85,10 @@ def list_tokens(ctx: typer.Context):
     List tokens on PyPI
     """
     app.list_tokens(
-        headless=not ctx.obj.headful, persist_to=ctx.obj.persist_to
+        headless=ctx.obj.headless,
+        persist_to=ctx.obj.persist_to,
+        username=ctx.obj.username,
+        password=ctx.obj.password,
     )
 
 

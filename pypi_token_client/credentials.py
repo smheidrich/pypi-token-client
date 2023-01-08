@@ -12,14 +12,38 @@ class PypiCredentials:
     password: str
 
 
-def prompt_for_credentials() -> PypiCredentials:
-    username = input("pypi username: ")
+def get_credentials_from_keyring_and_prompt(
+    username: str | None = None, password: str | None = None
+) -> tuple[PypiCredentials, bool]:
+    """
+    Get PyPI credentials from both the keyring and by prompting the user.
+
+    Returns:
+      Tuple of the credentials and whether the credentials were not in the
+      keyring ("credentials are new" boolean).
+    """
+    if username is not None and password is not None:
+        return (PypiCredentials(username, password), False)
+    if username is None:
+        username = input("pypi username: ")
+    if password is not None:
+        return (PypiCredentials(username, password), True)
+    credentials = get_credentials_from_keyring(username)
+    if credentials is None:
+        password = getpass("pypi password: ")
+        return (PypiCredentials(username, password), True)
+    return (credentials, False)
+
+
+def prompt_for_credentials(username: str | None = None) -> PypiCredentials:
+    if username is None:
+        username = input("pypi username: ")
     password = getpass("pypi password: ")
     return PypiCredentials(username, password)
 
 
-def get_credentials_from_keyring() -> PypiCredentials | None:
-    cred = keyring.get_credential(keyring_service_name, None)
+def get_credentials_from_keyring(username: str) -> PypiCredentials | None:
+    cred = keyring.get_credential(keyring_service_name, username)
     if cred:
         return PypiCredentials(cred.username, cred.password)
     return None

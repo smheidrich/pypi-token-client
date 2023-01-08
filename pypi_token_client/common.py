@@ -26,6 +26,10 @@ class PasswordError(LoginError):
     pass
 
 
+class TooManyAttemptsError(LoginError):
+    pass
+
+
 class CreateTokenError(Exception):
     pass
 
