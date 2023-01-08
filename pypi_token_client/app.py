@@ -92,3 +92,19 @@ def list_tokens(
         pprint(tokens)
 
     asyncio.run(_run())
+
+
+def delete_token(
+    name: str,
+    headless: bool = True,
+    persist_to: Path | None = None,
+    username: str | None = None,
+    password: str | None = None,
+) -> None:
+    async def _run():
+        async with logged_in_session(
+            username, password, headless, persist_to
+        ) as session:
+            await session.delete_token(name)
+
+    asyncio.run(_run())

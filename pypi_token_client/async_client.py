@@ -94,7 +94,7 @@ class AsyncPypiTokenClientSession:
         )
         if user_button is None:
             return None
-        username = await user_button.inner_text()
+        username = (await user_button.inner_text()).strip()
         return username
 
     async def _handle_login(self) -> bool:
@@ -113,7 +113,8 @@ class AsyncPypiTokenClientSession:
             else:
                 # TODO log out & go to login page
                 raise NotImplementedError(
-                    "logged-in user doesn't match credential username, "
+                    f"logged-in user {logged_in_user!r} doesn't match "
+                    f"credential username {self.credentials.username!r}, "
                     "which can't be handled yet"
                 )
         if not self.page.url.startswith("https://pypi.org/account/login/"):
@@ -242,7 +243,7 @@ class AsyncPypiTokenClientSession:
             async with self.page.expect_event(
                 "domcontentloaded"
             ), self.page.expect_navigation():
-                print("creating token...")
+                print(f"creating token {token_name!r}...")
                 await token_name_input.press("Enter")
             token_name_errors_or_none = one_or_none(
                 await self.page.locator("#token-name-errors ul li").all()
@@ -331,3 +332,72 @@ class AsyncPypiTokenClientSession:
                 entry = TokenListEntry(name, scope, created, last_used)
                 token_list.append(entry)
             return token_list
+
+    @_with_lock
+    async def delete_token(self, token_name: str):
+        await self.page.goto(
+            "https://pypi.org/manage/account/",
+            wait_until="domcontentloaded",
+        )
+        async with self._handle_errors():
+            # login if necessary
+            await self._handle_login()
+            # confirm password if necessary
+            await self._confirm_password()
+            # get list
+            token_rows = await self.page.locator(
+                "#api-tokens > table > tbody > tr"
+            ).all()
+            for row in token_rows:
+                cols = await row.locator("th,td").all()
+                name = await cols[0].inner_text()
+                if name != token_name:
+                    continue
+                options_button = one_or_none(
+                    await cols[4]
+                    .locator("nav > button")
+                    .get_by_text("Options", exact=True)
+                    .all()
+                )
+                if options_button is None:
+                    raise UnexpectedContentError(
+                        "no options button found for token"
+                    )
+                await options_button.click()
+                remove_button = (
+                    cols[4].locator("nav a").get_by_text("Remove token")
+                )
+                await remove_button.wait_for(state="visible", timeout=5000)
+                await remove_button.click()
+                confirm_dialog_heading = self.page.get_by_text(
+                    f"Remove API token - {token_name}", exact=True
+                )
+                confirm_dialog = self.page.locator(
+                    'div[role="dialog"]', has=confirm_dialog_heading
+                )
+                await confirm_dialog.wait_for(state="visible", timeout=5000)
+                password_input = one_or_none(
+                    await confirm_dialog.locator(
+                        'input[type="password"]'
+                    ).all()
+                )
+                if password_input is None:
+                    raise UnexpectedContentError("no password field found")
+                await password_input.fill(self.credentials.password)
+                async with self.page.expect_event(
+                    "domcontentloaded"
+                ), self.page.expect_navigation():
+                    print(f"deleting token {token_name!r}...")
+                    await password_input.press("Enter")
+                deletion_message = one_or_none(
+                    await self.page.get_by_text("Deleted API token").all()
+                )
+                if deletion_message is None:
+                    raise UnexpectedContentError(
+                        "something went wrong deleting the token"
+                    )
+                print(f"deleted token {token_name!r}")
+                return
+            else:
+                print(f"no token named {token_name} found. nothing to do")
+                return
