@@ -2,7 +2,6 @@ from asyncio import Lock
 from contextlib import asynccontextmanager
 from functools import wraps
 from pathlib import Path
-from traceback import print_exc
 from typing import Sequence
 
 from dateutil.parser import isoparse
@@ -187,25 +186,14 @@ class AsyncPypiTokenClientSession:
             print("confirming password...")
             await password_input.press("Enter")
 
-    @asynccontextmanager
-    async def _handle_errors(self):
-        try:
-            yield
-        except Exception:
-            print_exc()
-            if self.headless:
-                print(
-                    "If you want to see what exactly went wrong in the "
-                    "browser window, rerun in non-headless mode"
-                )
-            else:
-                print_exc()
-                print(
-                    "check browser window for what exactly went wrong "
-                    "and close it once done"
-                )
-                await self.page.wait_for_event("close", timeout=0)
-            raise
+    async def wait_until_closed(self):
+        """
+        Wait until the user closes the browser if it's not headless.
+
+        Has no effect and returns immediately in headless mode.
+        """
+
+        await self.page.wait_for_event("close", timeout=0)
 
     @_with_lock
     async def create_project_token(
@@ -217,51 +205,48 @@ class AsyncPypiTokenClientSession:
             "https://pypi.org/manage/account/token/",
             wait_until="domcontentloaded",
         )
-        async with self._handle_errors():
-            # login if necessary
-            await self._handle_login()
-            # confirm password if necessary
-            await self._confirm_password()
-            # fill in token name field
-            token_name_input = one_or_none(
-                await self.page.locator("#description").all()
-            )
-            if token_name_input is None:
-                raise UnexpectedContentError(
-                    "no token name field found on page"
-                )
-            await token_name_input.fill(token_name)
-            # select token scope => project only
-            scope_selector = one_or_none(
-                await self.page.locator("#token_scope").all()
-            )
-            if scope_selector is None:
-                raise UnexpectedContentError("no scope selector found on page")
-            await scope_selector.select_option(
-                value=f"scope:project:{project_name}"
-            )
-            async with self.page.expect_event(
-                "domcontentloaded"
-            ), self.page.expect_navigation():
-                print(f"creating token {token_name!r}...")
-                await token_name_input.press("Enter")
-            token_name_errors_or_none = one_or_none(
-                await self.page.locator("#token-name-errors ul li").all()
-            )
-            token_name_error = (
-                await token_name_errors_or_none.inner_text()
-                if token_name_errors_or_none is not None
-                else None
-            )
-            if token_name_error is not None:
-                raise TokenNameError(token_name_error)
-            token_block = one_or_none(
-                await self.page.locator("#provisioned-key > code").all()
-            )
-            if not token_block:
-                raise UnexpectedContentError("no token block found on page")
-            token = await token_block.inner_text()
-            return token
+        # login if necessary
+        await self._handle_login()
+        # confirm password if necessary
+        await self._confirm_password()
+        # fill in token name field
+        token_name_input = one_or_none(
+            await self.page.locator("#description").all()
+        )
+        if token_name_input is None:
+            raise UnexpectedContentError("no token name field found on page")
+        await token_name_input.fill(token_name)
+        # select token scope => project only
+        scope_selector = one_or_none(
+            await self.page.locator("#token_scope").all()
+        )
+        if scope_selector is None:
+            raise UnexpectedContentError("no scope selector found on page")
+        await scope_selector.select_option(
+            value=f"scope:project:{project_name}"
+        )
+        async with self.page.expect_event(
+            "domcontentloaded"
+        ), self.page.expect_navigation():
+            print(f"creating token {token_name!r}...")
+            await token_name_input.press("Enter")
+        token_name_errors_or_none = one_or_none(
+            await self.page.locator("#token-name-errors ul li").all()
+        )
+        token_name_error = (
+            await token_name_errors_or_none.inner_text()
+            if token_name_errors_or_none is not None
+            else None
+        )
+        if token_name_error is not None:
+            raise TokenNameError(token_name_error)
+        token_block = one_or_none(
+            await self.page.locator("#provisioned-key > code").all()
+        )
+        if not token_block:
+            raise UnexpectedContentError("no token block found on page")
+        token = await token_block.inner_text()
+        return token
 
     @_with_lock
     async def login(self) -> bool:
@@ -285,9 +270,8 @@ class AsyncPypiTokenClientSession:
             "https://pypi.org/account/login/",
             wait_until="domcontentloaded",
         )
-        async with self._handle_errors():
-            # login if necessary
-            return await self._handle_login()
+        # login if necessary
+        return await self._handle_login()
 
     @_with_lock
     async def get_token_list(self) -> Sequence[TokenListEntry]:
@@ -295,43 +279,40 @@ class AsyncPypiTokenClientSession:
             "https://pypi.org/manage/account/",
             wait_until="domcontentloaded",
         )
-        async with self._handle_errors():
-            # login if necessary
-            await self._handle_login()
-            # confirm password if necessary
-            await self._confirm_password()
-            # get list
-            token_rows = await self.page.locator(
-                "#api-tokens > table > tbody > tr"
-            ).all()
-            token_list = []
-            for row in token_rows:
-                cols = await row.locator("th,td").all()
-                name = await cols[0].inner_text()
-                scope_str = await cols[1].inner_text()
-                scope = (
-                    AllProjects()
-                    if scope_str == "All projects"
-                    else SingleProject(scope_str)
-                )
-                created = isoparse(
-                    await one_or_none(
-                        await cols[2].locator("time").all()
-                    ).get_attribute("datetime")
-                )
-                last_used_time_elem = one_or_none(
-                    await cols[3].locator("time").all()
-                )
-                last_used = (
-                    isoparse(
-                        await last_used_time_elem.get_attribute("datetime")
-                    )
-                    if last_used_time_elem is not None
-                    else None
-                )
-                entry = TokenListEntry(name, scope, created, last_used)
-                token_list.append(entry)
-            return token_list
+        # login if necessary
+        await self._handle_login()
+        # confirm password if necessary
+        await self._confirm_password()
+        # get list
+        token_rows = await self.page.locator(
+            "#api-tokens > table > tbody > tr"
+        ).all()
+        token_list = []
+        for row in token_rows:
+            cols = await row.locator("th,td").all()
+            name = await cols[0].inner_text()
+            scope_str = await cols[1].inner_text()
+            scope = (
+                AllProjects()
+                if scope_str == "All projects"
+                else SingleProject(scope_str)
+            )
+            created = isoparse(
+                await one_or_none(
+                    await cols[2].locator("time").all()
+                ).get_attribute("datetime")
+            )
+            last_used_time_elem = one_or_none(
+                await cols[3].locator("time").all()
+            )
+            last_used = (
+                isoparse(await last_used_time_elem.get_attribute("datetime"))
+                if last_used_time_elem is not None
+                else None
+            )
+            entry = TokenListEntry(name, scope, created, last_used)
+            token_list.append(entry)
+        return token_list
 
     @_with_lock
     async def delete_token(self, token_name: str):
@@ -339,65 +320,62 @@ class AsyncPypiTokenClientSession:
             "https://pypi.org/manage/account/",
             wait_until="domcontentloaded",
         )
-        async with self._handle_errors():
-            # login if necessary
-            await self._handle_login()
-            # confirm password if necessary
-            await self._confirm_password()
-            # get list
-            token_rows = await self.page.locator(
-                "#api-tokens > table > tbody > tr"
-            ).all()
-            for row in token_rows:
-                cols = await row.locator("th,td").all()
-                name = await cols[0].inner_text()
-                if name != token_name:
-                    continue
-                options_button = one_or_none(
-                    await cols[4]
-                    .locator("nav > button")
-                    .get_by_text("Options", exact=True)
-                    .all()
+        # login if necessary
+        await self._handle_login()
+        # confirm password if necessary
+        await self._confirm_password()
+        # get list
+        token_rows = await self.page.locator(
+            "#api-tokens > table > tbody > tr"
+        ).all()
+        for row in token_rows:
+            cols = await row.locator("th,td").all()
+            name = await cols[0].inner_text()
+            if name != token_name:
+                continue
+            options_button = one_or_none(
+                await cols[4]
+                .locator("nav > button")
+                .get_by_text("Options", exact=True)
+                .all()
+            )
+            if options_button is None:
+                raise UnexpectedContentError(
+                    "no options button found for token"
                 )
-                if options_button is None:
-                    raise UnexpectedContentError(
-                        "no options button found for token"
-                    )
-                await options_button.click()
-                remove_button = (
-                    cols[4].locator("nav a").get_by_text("Remove token")
+            await options_button.click()
+            remove_button = (
+                cols[4].locator("nav a").get_by_text("Remove token")
+            )
+            await remove_button.wait_for(state="visible", timeout=5000)
+            await remove_button.click()
+            confirm_dialog_heading = self.page.get_by_text(
+                f"Remove API token - {token_name}", exact=True
+            )
+            confirm_dialog = self.page.locator(
+                'div[role="dialog"]', has=confirm_dialog_heading
+            )
+            await confirm_dialog.wait_for(state="visible", timeout=5000)
+            password_input = one_or_none(
+                await confirm_dialog.locator('input[type="password"]').all()
+            )
+            if password_input is None:
+                raise UnexpectedContentError("no password field found")
+            await password_input.fill(self.credentials.password)
+            async with self.page.expect_event(
+                "domcontentloaded"
+            ), self.page.expect_navigation():
+                print(f"deleting token {token_name!r}...")
+                await password_input.press("Enter")
+            deletion_message = one_or_none(
+                await self.page.get_by_text("Deleted API token").all()
+            )
+            if deletion_message is None:
+                raise UnexpectedContentError(
+                    "something went wrong deleting the token"
                 )
-                await remove_button.wait_for(state="visible", timeout=5000)
-                await remove_button.click()
-                confirm_dialog_heading = self.page.get_by_text(
-                    f"Remove API token - {token_name}", exact=True
-                )
-                confirm_dialog = self.page.locator(
-                    'div[role="dialog"]', has=confirm_dialog_heading
-                )
-                await confirm_dialog.wait_for(state="visible", timeout=5000)
-                password_input = one_or_none(
-                    await confirm_dialog.locator(
-                        'input[type="password"]'
-                    ).all()
-                )
-                if password_input is None:
-                    raise UnexpectedContentError("no password field found")
-                await password_input.fill(self.credentials.password)
-                async with self.page.expect_event(
-                    "domcontentloaded"
-                ), self.page.expect_navigation():
-                    print(f"deleting token {token_name!r}...")
-                    await password_input.press("Enter")
-                deletion_message = one_or_none(
-                    await self.page.get_by_text("Deleted API token").all()
-                )
-                if deletion_message is None:
-                    raise UnexpectedContentError(
-                        "something went wrong deleting the token"
-                    )
-                print(f"deleted token {token_name!r}")
-                return
-            else:
-                print(f"no token named {token_name} found. nothing to do")
-                return
+            print(f"deleted token {token_name!r}")
+            return
+        else:
+            print(f"no token named {token_name} found. nothing to do")
+            return
