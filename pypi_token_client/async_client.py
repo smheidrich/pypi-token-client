@@ -204,7 +204,7 @@ class AsyncPypiTokenClientSession:
                     "check browser window for what exactly went wrong "
                     "and close it once done"
                 )
-                await self.context.wait_for_event("close", timeout=0)
+                await self.page.wait_for_event("close", timeout=0)
             raise
 
     @_with_lock
