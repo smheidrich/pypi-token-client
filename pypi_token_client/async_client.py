@@ -376,13 +376,9 @@ class AsyncPypiTokenClientSession:
             ), self.page.expect_navigation():
                 print(f"deleting token {token_name!r}...")
                 await password_input.press("Enter")
-            deletion_message = one_or_none(
-                await self.page.get_by_text("Deleted API token").all()
+            await self.page.get_by_text("Deleted API token").wait_for(
+                state="visible", timeout=5000
             )
-            if deletion_message is None:
-                raise UnexpectedContentError(
-                    "something went wrong deleting the token"
-                )
             print(f"deleted token {token_name!r}")
             return
         else:
