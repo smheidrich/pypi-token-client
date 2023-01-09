@@ -24,16 +24,17 @@ async def logged_in_session(
     password: str | None,
     headless: bool,
     persist_to: Path | None,
+    pypi_base_url: str = "https://pypi.org",
 ) -> AsyncIterator[AsyncPypiTokenClientSession]:
     # don't do anything interactive (e.g. ask about saving to keyring or retry
     # with prompt) if both username and password are provided (generally
     # suggests no interactivity is desired)
     interactive = username is None or password is None
     credentials, credentials_are_new = get_credentials_from_keyring_and_prompt(
-        username, password
+        pypi_base_url, username, password
     )
     async with async_pypi_token_client(
-        credentials, headless, persist_to
+        credentials, headless, persist_to, pypi_base_url
     ) as session:
         for attempt in count():
             try:
@@ -43,7 +44,7 @@ async def logged_in_session(
                         "success! save credentials to keyring (Y/n)? "
                     )
                     if save == "Y":
-                        save_credentials_to_keyring(credentials)
+                        save_credentials_to_keyring(pypi_base_url, credentials)
                         print("saved")
                     else:
                         print("not saving")
@@ -87,11 +88,12 @@ def create_token(
     persist_to: Path | None = None,
     username: str | None = None,
     password: str | None = None,
+    pypi_base_url: str = "https://pypi.org",
 ) -> None:
     async def _run():
         token_name_ = token_name or f"a{date.today()}"
         async with logged_in_session(
-            username, password, headless, persist_to
+            username, password, headless, persist_to, pypi_base_url
         ) as session, handle_errors(session):
             token = await session.create_project_token(project, token_name_)
         print("Created token:")
@@ -105,10 +107,11 @@ def list_tokens(
     persist_to: Path | None = None,
     username: str | None = None,
     password: str | None = None,
+    pypi_base_url: str = "https://pypi.org",
 ) -> None:
     async def _run():
         async with logged_in_session(
-            username, password, headless, persist_to
+            username, password, headless, persist_to, pypi_base_url
         ) as session, handle_errors(session):
             tokens = await session.get_token_list()
         pprint(tokens)
@@ -122,10 +125,11 @@ def delete_token(
     persist_to: Path | None = None,
     username: str | None = None,
     password: str | None = None,
+    pypi_base_url: str = "https://pypi.org",
 ) -> None:
     async def _run():
         async with logged_in_session(
-            username, password, headless, persist_to
+            username, password, headless, persist_to, pypi_base_url
         ) as session, handle_errors(session):
             await session.delete_token(name)
 

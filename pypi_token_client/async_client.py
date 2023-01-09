@@ -46,6 +46,7 @@ async def async_pypi_token_client(
     credentials: PypiCredentials,
     headless: bool = False,
     persist_to: Path | str | None = None,
+    base_url: str = "https://pypi.org",
 ):
     async with async_playwright() as p:
         if persist_to is None:
@@ -59,7 +60,9 @@ async def async_pypi_token_client(
         pages = context.pages
         assert len(pages) == 1
         page = pages[0]
-        yield AsyncPypiTokenClientSession(context, page, credentials, headless)
+        yield AsyncPypiTokenClientSession(
+            context, page, credentials, headless, base_url
+        )
 
 
 def _with_lock(meth):
@@ -78,11 +81,13 @@ class AsyncPypiTokenClientSession:
         page,
         credentials: PypiCredentials,
         headless: bool = True,
+        base_url: str = "https://pypi.org",
     ):
         self.context = context
         self.page = page
         self.credentials = credentials
         self.headless = headless
+        self.base_url = base_url
         self._lock = Lock()
 
     async def _get_logged_in_user(self) -> str | None:
@@ -116,7 +121,9 @@ class AsyncPypiTokenClientSession:
                     f"credential username {self.credentials.username!r}, "
                     "which can't be handled yet"
                 )
-        if not self.page.url.startswith("https://pypi.org/account/login/"):
+        if not self.page.url.startswith(
+            self.base_url.rstrip("/") + "/account/login/"
+        ):
             print("no login required")
             return False
         username_input = one_or_none(
@@ -140,7 +147,9 @@ class AsyncPypiTokenClientSession:
         ), self.page.expect_navigation():
             print("logging in...")
             await password_input.press("Enter")
-        if self.page.url.startswith("https://pypi.org/account/login/"):
+        if self.page.url.startswith(
+            self.base_url.rstrip("/") + "/account/login/"
+        ):
             username_errors_or_none = one_or_none(
                 await self.page.locator("#username-errors ul li").all()
             )
@@ -202,7 +211,7 @@ class AsyncPypiTokenClientSession:
         token_name: str,
     ) -> str:
         await self.page.goto(
-            "https://pypi.org/manage/account/token/",
+            self.base_url + "/manage/account/token/",
             wait_until="domcontentloaded",
         )
         # login if necessary
@@ -267,7 +276,7 @@ class AsyncPypiTokenClientSession:
             done.
         """
         await self.page.goto(
-            "https://pypi.org/account/login/",
+            self.base_url + "/account/login/",
             wait_until="domcontentloaded",
         )
         # login if necessary
@@ -276,7 +285,7 @@ class AsyncPypiTokenClientSession:
     @_with_lock
     async def get_token_list(self) -> Sequence[TokenListEntry]:
         await self.page.goto(
-            "https://pypi.org/manage/account/",
+            self.base_url + "/manage/account/",
             wait_until="domcontentloaded",
         )
         # login if necessary
@@ -317,7 +326,7 @@ class AsyncPypiTokenClientSession:
     @_with_lock
     async def delete_token(self, token_name: str):
         await self.page.goto(
-            "https://pypi.org/manage/account/",
+            self.base_url + "/manage/account/",
             wait_until="domcontentloaded",
         )
         # login if necessary

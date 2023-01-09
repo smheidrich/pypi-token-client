@@ -3,7 +3,7 @@ from getpass import getpass
 
 import keyring
 
-keyring_service_name = "pypi-token-automation"
+keyring_service_prefix = "pypi-token-automation"
 
 
 @dataclass
@@ -12,8 +12,14 @@ class PypiCredentials:
     password: str
 
 
+def make_keyring_service_name(pypi_base_url: str) -> str:
+    return f"{keyring_service_prefix} ({pypi_base_url})"
+
+
 def get_credentials_from_keyring_and_prompt(
-    username: str | None = None, password: str | None = None
+    pypi_base_url: str,
+    username: str | None = None,
+    password: str | None = None,
 ) -> tuple[PypiCredentials, bool]:
     """
     Get PyPI credentials from both the keyring and by prompting the user.
@@ -28,7 +34,7 @@ def get_credentials_from_keyring_and_prompt(
         username = input("pypi username: ")
     if password is not None:
         return (PypiCredentials(username, password), True)
-    credentials = get_credentials_from_keyring(username)
+    credentials = get_credentials_from_keyring(pypi_base_url, username)
     if credentials is None:
         password = getpass("pypi password: ")
         return (PypiCredentials(username, password), True)
@@ -42,14 +48,22 @@ def prompt_for_credentials(username: str | None = None) -> PypiCredentials:
     return PypiCredentials(username, password)
 
 
-def get_credentials_from_keyring(username: str) -> PypiCredentials | None:
-    cred = keyring.get_credential(keyring_service_name, username)
+def get_credentials_from_keyring(
+    pypi_base_url: str, username: str
+) -> PypiCredentials | None:
+    cred = keyring.get_credential(
+        make_keyring_service_name(pypi_base_url), username
+    )
     if cred:
         return PypiCredentials(cred.username, cred.password)
     return None
 
 
-def save_credentials_to_keyring(credentials: PypiCredentials):
+def save_credentials_to_keyring(
+    pypi_base_url: str, credentials: PypiCredentials
+):
     keyring.set_password(
-        keyring_service_name, credentials.username, credentials.password
+        make_keyring_service_name(pypi_base_url),
+        credentials.username,
+        credentials.password,
     )
