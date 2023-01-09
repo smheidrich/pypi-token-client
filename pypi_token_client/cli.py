@@ -3,7 +3,7 @@ from pathlib import Path
 
 import typer
 
-from . import app
+from .app import App
 
 cli_app = typer.Typer(
     context_settings={
@@ -19,6 +19,16 @@ class TyperState:
     username: str | None
     password: str | None
     pypi_base_url: str = "https://pypi.org"
+
+
+def _app_from_typer_state(state: TyperState) -> App:
+    return App(
+        state.headless,
+        state.persist_to,
+        state.username,
+        state.password,
+        state.pypi_base_url,
+    )
 
 
 @cli_app.callback()
@@ -74,15 +84,8 @@ def create(
     """
     Create a new project token on PyPI
     """
-    app.create_token(
-        project=project,
-        token_name=token_name,
-        headless=ctx.obj.headless,
-        persist_to=ctx.obj.persist_to,
-        username=ctx.obj.username,
-        password=ctx.obj.password,
-        pypi_base_url=ctx.obj.pypi_base_url,
-    )
+    app = _app_from_typer_state(ctx.obj)
+    app.create_token(project, token_name)
 
 
 @cli_app.command("list")
@@ -90,13 +93,8 @@ def list_tokens(ctx: typer.Context):
     """
     List tokens on PyPI
     """
-    app.list_tokens(
-        headless=ctx.obj.headless,
-        persist_to=ctx.obj.persist_to,
-        username=ctx.obj.username,
-        password=ctx.obj.password,
-        pypi_base_url=ctx.obj.pypi_base_url,
-    )
+    app = _app_from_typer_state(ctx.obj)
+    app.list_tokens()
 
 
 @cli_app.command()
@@ -107,14 +105,8 @@ def delete(
     """
     Delete token on PyPI
     """
-    app.delete_token(
-        name=name,
-        headless=ctx.obj.headless,
-        persist_to=ctx.obj.persist_to,
-        username=ctx.obj.username,
-        password=ctx.obj.password,
-        pypi_base_url=ctx.obj.pypi_base_url,
-    )
+    app = _app_from_typer_state(ctx.obj)
+    app.delete_token(name)
 
 
 def cli_main():

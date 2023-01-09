@@ -18,119 +18,121 @@ from .credentials import (
 max_login_attempts = 3
 
 
-@asynccontextmanager
-async def logged_in_session(
-    username: str | None,
-    password: str | None,
-    headless: bool,
-    persist_to: Path | None,
-    pypi_base_url: str = "https://pypi.org",
-) -> AsyncIterator[AsyncPypiTokenClientSession]:
-    # don't do anything interactive (e.g. ask about saving to keyring or retry
-    # with prompt) if both username and password are provided (generally
-    # suggests no interactivity is desired)
-    interactive = username is None or password is None
-    credentials, credentials_are_new = get_credentials_from_keyring_and_prompt(
-        pypi_base_url, username, password
-    )
-    async with async_pypi_token_client(
-        credentials, headless, persist_to, pypi_base_url
-    ) as session:
-        for attempt in count():
-            try:
-                did_login = await session.login()
-                if did_login and credentials_are_new and interactive:
-                    save = input(
-                        "success! save credentials to keyring (Y/n)? "
-                    )
-                    if save == "Y":
-                        save_credentials_to_keyring(pypi_base_url, credentials)
-                        print("saved")
-                    else:
-                        print("not saving")
-                break
-            except (UsernameError, PasswordError) as e:
-                print(f"Login failed: {e}")
-                if attempt >= max_login_attempts or not interactive:
-                    print("Giving up.")
-                    raise
-                credentials = prompt_for_credentials()
-                credentials_are_new = True
-                session.credentials = credentials
-        yield session
+class App:
+    def __init__(
+        self,
+        headless: bool = True,
+        persist_to: Path | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        pypi_base_url: str = "https://pypi.org",
+    ):
+        self.headless = headless
+        self.persist_to = persist_to
+        self.username = username
+        self.password = password
+        self.pypi_base_url = pypi_base_url
 
+    @asynccontextmanager
+    async def _logged_in_session(
+        self,
+    ) -> AsyncIterator[AsyncPypiTokenClientSession]:
+        # don't do anything interactive (e.g. ask about saving to keyring or
+        # retry with prompt) if both username and password are provided
+        # (generally suggests no interactivity is desired)
+        interactive = self.username is None or self.password is None
+        (
+            credentials,
+            credentials_are_new,
+        ) = get_credentials_from_keyring_and_prompt(
+            self.pypi_base_url, self.username, self.password
+        )
+        async with async_pypi_token_client(
+            credentials, self.headless, self.persist_to, self.pypi_base_url
+        ) as session:
+            for attempt in count():
+                try:
+                    did_login = await session.login()
+                    if did_login and credentials_are_new and interactive:
+                        save = input(
+                            "success! save credentials to keyring (Y/n)? "
+                        )
+                        if save == "Y":
+                            save_credentials_to_keyring(
+                                self.pypi_base_url, credentials
+                            )
+                            print("saved")
+                        else:
+                            print("not saving")
+                    break
+                except (UsernameError, PasswordError) as e:
+                    print(f"Login failed: {e}")
+                    if attempt >= max_login_attempts or not interactive:
+                        print("Giving up.")
+                        raise
+                    credentials = prompt_for_credentials()
+                    credentials_are_new = True
+                    session.credentials = credentials
+            yield session
 
-@asynccontextmanager
-async def handle_errors(session: AsyncPypiTokenClientSession):
-    try:
-        yield
-    except Exception:
-        print_exc()
-        if session.headless:
-            print(
-                "If you want to see what exactly went wrong by looking at the "
-                "browser window, rerun in non-headless mode"
-            )
-        else:
+    @staticmethod
+    @asynccontextmanager
+    async def _handle_errors(session: AsyncPypiTokenClientSession):
+        try:
+            yield
+        except Exception:
             print_exc()
-            print(
-                "check browser window for what exactly went wrong "
-                "and close it once done"
-            )
-            await session.wait_until_closed()
-        exit(1)
+            if session.headless:
+                print(
+                    "If you want to see what exactly went wrong by looking at "
+                    "the browser window, rerun in non-headless mode"
+                )
+            else:
+                print_exc()
+                print(
+                    "check browser window for what exactly went wrong "
+                    "and close it once done"
+                )
+                await session.wait_until_closed()
+            exit(1)
 
+    @asynccontextmanager
+    async def _logged_in_error_handling_session(
+        self,
+    ) -> AsyncIterator[AsyncPypiTokenClientSession]:
+        async with self._logged_in_session() as session, self._handle_errors(
+            session
+        ):
+            yield session
 
-def create_token(
-    project: str,
-    token_name: str | None = None,
-    headless: bool = True,
-    persist_to: Path | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    pypi_base_url: str = "https://pypi.org",
-) -> None:
-    async def _run():
-        token_name_ = token_name or f"a{date.today()}"
-        async with logged_in_session(
-            username, password, headless, persist_to, pypi_base_url
-        ) as session, handle_errors(session):
-            token = await session.create_project_token(project, token_name_)
-        print("Created token:")
-        print(token)
+    def create_token(
+        self, project: str, token_name: str | None = None
+    ) -> None:
+        async def _run():
+            token_name_ = token_name or f"a{date.today()}"
+            async with self._logged_in_error_handling_session() as session:
+                token = await session.create_project_token(
+                    project, token_name_
+                )
+            print("Created token:")
+            print(token)
 
-    asyncio.run(_run())
+        asyncio.run(_run())
 
+    def list_tokens(self) -> None:
+        async def _run():
+            async with self._logged_in_error_handling_session() as session:
+                tokens = await session.get_token_list()
+            pprint(tokens)
 
-def list_tokens(
-    headless: bool = True,
-    persist_to: Path | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    pypi_base_url: str = "https://pypi.org",
-) -> None:
-    async def _run():
-        async with logged_in_session(
-            username, password, headless, persist_to, pypi_base_url
-        ) as session, handle_errors(session):
-            tokens = await session.get_token_list()
-        pprint(tokens)
+        asyncio.run(_run())
 
-    asyncio.run(_run())
+    def delete_token(
+        self,
+        name: str,
+    ) -> None:
+        async def _run():
+            async with self._logged_in_error_handling_session() as session:
+                await session.delete_token(name)
 
-
-def delete_token(
-    name: str,
-    headless: bool = True,
-    persist_to: Path | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    pypi_base_url: str = "https://pypi.org",
-) -> None:
-    async def _run():
-        async with logged_in_session(
-            username, password, headless, persist_to, pypi_base_url
-        ) as session, handle_errors(session):
-            await session.delete_token(name)
-
-    asyncio.run(_run())
+        asyncio.run(_run())
