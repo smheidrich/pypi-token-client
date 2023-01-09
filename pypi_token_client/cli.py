@@ -18,6 +18,7 @@ class TyperState:
     persist_to: Path | None
     username: str | None
     password: str | None
+    pypi_base_url: str = "https://pypi.org"
 
 
 @cli_app.callback()
@@ -49,12 +50,16 @@ def typer_callback(
         "will then be visible in the list of processes; "
         "it's safer to provide it as an env var",
     ),
+    pypi_base_url: str = typer.Option(
+        "https://pypi.org", help="base URL of the pypi website to use"
+    ),
 ):
     ctx.obj = TyperState(
         headless,
         Path(persist_to) if persist_to is not None else None,
         username,
         password,
+        pypi_base_url,
     )
 
 
@@ -76,6 +81,7 @@ def create(
         persist_to=ctx.obj.persist_to,
         username=ctx.obj.username,
         password=ctx.obj.password,
+        pypi_base_url=ctx.obj.pypi_base_url,
     )
 
 
@@ -89,6 +95,7 @@ def list_tokens(ctx: typer.Context):
         persist_to=ctx.obj.persist_to,
         username=ctx.obj.username,
         password=ctx.obj.password,
+        pypi_base_url=ctx.obj.pypi_base_url,
     )
 
 
@@ -106,6 +113,7 @@ def delete(
         persist_to=ctx.obj.persist_to,
         username=ctx.obj.username,
         password=ctx.obj.password,
+        pypi_base_url=ctx.obj.pypi_base_url,
     )
 
 
