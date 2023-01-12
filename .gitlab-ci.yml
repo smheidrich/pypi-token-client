@@ -50,14 +50,13 @@ publish package:
     - twine upload dist/*
 
 build docs:
-  allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
           || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - pip install sphinx sphinx-rtd-theme
     - ( cd doc && make html )
-    - mv build/html built-docs
+    - mv doc/_build/html built-docs
   artifacts:
     paths:
       - built-docs

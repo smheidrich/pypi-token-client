@@ -1,6 +1,8 @@
 """
 Sync "client", which is just a bunch of wrapper functions around the async one.
 
+TODO missing a lot of functionality, don't use yet.
+
 NOTE that this is less flexible than the async client because you can't have
 sessions that span multiple function invocations. I tried to support sessions
 here too but to no avail:
