@@ -31,6 +31,7 @@ build package:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
           || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          || $CI_COMMIT_TAG =~ /^v\d+.\d+.\d+-?.*$/
   script:
     - pip install build twine
     - python -m build --sdist
