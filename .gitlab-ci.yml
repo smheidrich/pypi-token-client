@@ -70,3 +70,6 @@ pages:
     - job: build docs
   script:
     - mv built-docs public
+  artifacts:
+    paths:
+      - public
