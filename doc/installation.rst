@@ -10,6 +10,12 @@ To install from PyPI:
 
   pip3 install pypi-token-client
 
+You'll also have to install the required Playwright browsers (currently just
+Chromium):
+
+.. code:: bash
+
+   playwright install chromium
 
 Source code
 -----------
