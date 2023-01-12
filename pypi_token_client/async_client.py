@@ -1,8 +1,11 @@
+"""
+`async`/`await`-based PyPI token client
+"""
 from asyncio import Lock
 from contextlib import asynccontextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Sequence
+from typing import AsyncIterator, Sequence
 
 from dateutil.parser import isoparse
 from playwright.async_api import async_playwright
@@ -19,7 +22,8 @@ from .common import (
     UsernameError,
 )
 from .credentials import PypiCredentials
-from .utils import one_or_none
+from .utils.playwright import launch_ephemeral_chromium_context
+from .utils.sequences import one_or_none
 
 
 def _expect_page(page, expected_url: str):
@@ -29,25 +33,28 @@ def _expect_page(page, expected_url: str):
         )
 
 
-async def launch_ephemeral_chromium_context(p, headless: bool = True):
-    """
-    Ephemeral version of Playwright's chromium.launch_persistent_context.
-
-    No idea why they didn't just include that themselves...
-    """
-    browser = await p.chromium.launch(headless=headless)
-    context = await browser.new_context()
-    await context.new_page()
-    return context
-
-
 @asynccontextmanager
 async def async_pypi_token_client(
     credentials: PypiCredentials,
     headless: bool = False,
     persist_to: Path | str | None = None,
     base_url: str = "https://pypi.org",
-):
+) -> AsyncIterator["AsyncPypiTokenClientSession"]:
+    """
+    Context manager for launching an async client session.
+
+    This is the main starting point for using the async client.
+
+    Args:
+        credentials: Credentials to log into PyPI with.
+        headless: If true, the browser window will not be shown.
+        persist_to: Directory in which to persist the browser state. ``None``
+            means no persistence.
+        base_url: PyPI base URL.
+
+    Returns:
+      A context manager for the async session.
+    """
     async with async_playwright() as p:
         if persist_to is None:
             context = await launch_ephemeral_chromium_context(
@@ -75,6 +82,19 @@ def _with_lock(meth):
 
 
 class AsyncPypiTokenClientSession:
+    """
+    Async token client session.
+
+    Should not be instantiated directly but only through
+    :func:`async_pypi_token_client`.
+
+    A session's lifecycle corresponds to that of the browser instance which is
+    used to perform operations on the PyPI web interface. When multiple
+    operations have to be performed in sequence, it makes sense to do so in the
+    a single session to minimize the number of times the browser has to be
+    restarted, as this is fairly resource intensive and time consuming.
+    """
+
     def __init__(
         self,
         context,

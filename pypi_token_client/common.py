@@ -1,3 +1,6 @@
+"""
+Data structures common to both sync and async client.
+"""
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -36,13 +39,6 @@ class CreateTokenError(Exception):
 
 class TokenNameError(Exception):
     pass
-
-
-def expect_page(page, expected_url: str):
-    if page.url != expected_url:
-        raise UnexpectedPageError(
-            f"ended up on unexpected page {page.url} (expected {expected_url})"
-        )
 
 
 @dataclass

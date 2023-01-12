@@ -1,3 +1,6 @@
+"""
+PyPI credential data structure and utilities.
+"""
 from dataclasses import dataclass
 from getpass import getpass
 
