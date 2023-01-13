@@ -1,5 +1,10 @@
 # pypi-token-client
 
+[![pipeline status](https://gitlab.com/smheidrich/pypi-token-client/badges/main/pipeline.svg?style=flat-square)](https://gitlab.com/smheidrich/pypi-token-client/-/commits/main)
+[![docs](https://img.shields.io/badge/docs-online-brightgreen?style=flat-square)](https://smheidrich.gitlab.io/pypi-token-client/)
+[![pypi](https://img.shields.io/pypi/v/pypi-token-client)](https://pypi.org/project/pypi-token-client/)
+[![supported python versions](https://img.shields.io/pypi/pyversions/pypi-token-client)](https://pypi.org/project/pypi-token-client/)
+
 Library and CLI tool for retrieving PyPI project tokens.
 
 ## Purpose
