@@ -5,7 +5,7 @@
 [![pypi](https://img.shields.io/pypi/v/pypi-token-client)](https://pypi.org/project/pypi-token-client/)
 [![supported python versions](https://img.shields.io/pypi/pyversions/pypi-token-client)](https://pypi.org/project/pypi-token-client/)
 
-Library and CLI tool for retrieving PyPI project tokens.
+Library and CLI tool for creating and managing PyPI project tokens.
 
 ## Purpose
 

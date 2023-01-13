@@ -1,7 +1,8 @@
 pypi-token-client
 =================
 
-pypi-token-client is a library and CLI tool for retrieving PyPI project tokens.
+pypi-token-client is a library and CLI tool for creating and managing PyPI
+project tokens.
 
 Purpose
 -------
