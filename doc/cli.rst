@@ -14,7 +14,7 @@ To create a new project-scoped token, you can simply do
 
 .. code:: bash
 
-   pypi-token-client create --token-name yourtokenname yourproject
+   pypi-token-client create --project yourproject yourtokenname
 
 The tool will prompt you for your PyPI username and password so it can log in,
 ask whether it should save your credentials to the system keyring (see below)
