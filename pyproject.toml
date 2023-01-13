@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pypi-token-client"
-version = "1.0.2"
+version = "1.0.3"
 description = "Library and CLI tool for retrieving PyPI project tokens"
 authors = ["smheidrich <smheidrich@weltenfunktion.de>"]
 readme = "README.md"

@@ -6,19 +6,24 @@ client to create a new token on PyPI:
 
 .. code:: python
 
+    import asyncio
     from os import getenv
 
-    from pypi_token_client.async_client import async_pypi_token_client
-    from pypi_token_client.common import SingleProject  # scope
-    from pypi_token_client.credentials import PypiCredentials
+    from pypi_token_client import (
+      async_pypi_token_client, SingleProject, PypiCredentials
+    )
 
     credentials = PypiCredentials(getenv("PYPI_USER"), getenv("PYPI_PASS"))
 
-    async with async_pypi_token_client(credentials) as session:
-        token = await session.create_token(
-            "my token",
-            SingleProject("my-project"),
-        )
+    async def main() -> str:
+      async with async_pypi_token_client(credentials) as session:
+          token = await session.create_token(
+              "my token",
+              SingleProject("my-project"),
+          )
+      return token
+
+    token = asyncio.run(main())
 
     print(token)
 

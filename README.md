@@ -33,8 +33,57 @@ This might be overkill and brittle but it works for now 🤷
 
 ## Installation
 
+To install from PyPI:
+
 ```bash
 pip3 install pypi-token-client
-# install the necessary browsers for Playwright
-playwright install
 ```
+
+You'll also have to install the required Playwright browsers (currently just
+Chromium):
+
+```bash
+playwright install chromium
+```
+
+## Command-line tool usage
+
+To create a token `yourtokenname` for your PyPI project `yourproject`:
+
+```bash
+pypi-token-client create --project yourproject yourtokenname
+```
+
+There are more commands - please refer to the docs.
+
+## Usage as a library
+
+Basic example script:
+
+```python
+import asyncio
+from os import getenv
+
+from pypi_token_client import (
+  async_pypi_token_client, SingleProject, PypiCredentials
+)
+
+credentials = PypiCredentials(getenv("PYPI_USER"), getenv("PYPI_PASS"))
+
+async def main() -> str:
+  async with async_pypi_token_client(credentials) as session:
+      token = await session.create_token(
+          "my token",
+          SingleProject("my-project"),
+      )
+  return token
+
+token = asyncio.run(main())
+
+print(token)
+```
+
+## More information
+
+For more detailed usage information and the API reference, refer to
+[the documentation](https://smheidrich.gitlab.io/pypi-token-client/).
