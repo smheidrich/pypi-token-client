@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date
 from itertools import count
 from pathlib import Path
 from pprint import pprint
@@ -105,15 +104,10 @@ class App:
         ):
             yield session
 
-    def create_token(
-        self, project: str, token_name: str | None = None
-    ) -> None:
+    def create_token(self, project: str, token_name: str) -> None:
         async def _run():
-            token_name_ = token_name or f"a{date.today()}"
             async with self._logged_in_error_handling_session() as session:
-                token = await session.create_project_token(
-                    project, token_name_
-                )
+                token = await session.create_project_token(project, token_name)
             print("Created token:")
             print(token)
 

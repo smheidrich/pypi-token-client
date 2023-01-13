@@ -76,14 +76,18 @@ def typer_callback(
 @cli_app.command()
 def create(
     ctx: typer.Context,
-    project: str = typer.Argument(..., help="project to generate token for"),
-    token_name: str = typer.Option(
-        None, help="name of the token; will be auto-generated if not given"
+    token_name: str = typer.Argument(..., help="name of the token"),
+    project: str = typer.Option(
+        None, help="project for which to generate token"
     ),
 ):
     """
-    Create a new project token on PyPI
+    Create a new token on PyPI
     """
+    if project is None:
+        raise NotImplementedError(
+            "creating non-project tokens is not yet supported"
+        )
     app = _app_from_typer_state(ctx.obj)
     app.create_token(project, token_name)
 
