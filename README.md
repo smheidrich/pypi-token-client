@@ -87,3 +87,7 @@ print(token)
 
 For more detailed usage information and the API reference, refer to
 [the documentation](https://smheidrich.gitlab.io/pypi-token-client/).
+
+## License
+
+MIT License, see `LICENSE` file.
