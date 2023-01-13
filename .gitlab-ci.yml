@@ -41,7 +41,9 @@ build package:
       - dist/*
 
 publish package:
-  allow_failure: true
+  variables:
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: $PYPI_TOKEN
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+.\d+.\d+-?.*$/
   needs:
