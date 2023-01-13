@@ -7,7 +7,7 @@ from pprint import pprint
 from traceback import print_exc
 
 from .async_client import AsyncPypiTokenClientSession, async_pypi_token_client
-from .common import PasswordError, UsernameError
+from .common import PasswordError, TokenScope, UsernameError
 from .credentials import (
     get_credentials_from_keyring_and_prompt,
     prompt_for_credentials,
@@ -104,10 +104,10 @@ class App:
         ):
             yield session
 
-    def create_token(self, project: str, token_name: str) -> None:
+    def create_token(self, token_name: str, scope: TokenScope) -> None:
         async def _run():
             async with self._logged_in_error_handling_session() as session:
-                token = await session.create_project_token(project, token_name)
+                token = await session.create_token(token_name, scope)
             print("Created token:")
             print(token)
 
