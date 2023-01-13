@@ -3,6 +3,8 @@ from pathlib import Path
 
 import typer
 
+from pypi_token_client.common import AllProjects, SingleProject
+
 from .app import App
 
 cli_app = typer.Typer(
@@ -84,12 +86,9 @@ def create(
     """
     Create a new token on PyPI
     """
-    if project is None:
-        raise NotImplementedError(
-            "creating non-project tokens is not yet supported"
-        )
+    scope = AllProjects() if project is None else SingleProject(project)
     app = _app_from_typer_state(ctx.obj)
-    app.create_token(project, token_name)
+    app.create_token(token_name, scope)
 
 
 @cli_app.command("list")

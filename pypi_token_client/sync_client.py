@@ -11,13 +11,15 @@ https://gitlab.com/smheidrich/pypi-token-client/-/merge_requests/1
 import asyncio
 from pathlib import Path
 
+from pypi_token_client.common import TokenScope
+
 from . import async_client
 from .credentials import PypiCredentials
 
 
-async def _create_project_token_async(
-    project_name: str,
+async def _create_token_async(
     token_name: str,
+    scope: TokenScope,
     credentials: PypiCredentials,
     headless: bool,
     persist_to: Path | str | None,
@@ -25,19 +27,19 @@ async def _create_project_token_async(
     async with async_client.async_pypi_token_client(
         credentials, headless, persist_to
     ) as session:
-        return await session.create_project_token(project_name, token_name)
+        return await session.create_token(token_name, scope)
 
 
-def create_project_token(
-    project: str,
+def create_token(
     token_name: str,
+    scope: TokenScope,
     credentials: PypiCredentials,
     headless: bool = False,
     persist_to: Path | str | None = None,
 ):
     return asyncio.run(
-        _create_project_token_async(
-            project, token_name, credentials, headless, persist_to
+        _create_token_async(
+            token_name, scope, credentials, headless, persist_to
         )
     )
 

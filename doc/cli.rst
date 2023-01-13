@@ -61,7 +61,7 @@ as a command-line argument with ``--username`` / ``-u``:
 
 .. code:: bash
 
-   pypi-token-client -u yourusername create --token-name yourtoken yourproject
+   pypi-token-client -u yourusername create --project yourproject yourtoken
 
 Technically, this is also possible for the password, but doing so is **not**
 recommended, as it will expose the password via the process's metadata

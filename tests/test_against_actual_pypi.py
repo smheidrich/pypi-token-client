@@ -6,6 +6,7 @@ from os import getenv
 import pytest
 
 from pypi_token_client.app import App
+from pypi_token_client.common import SingleProject
 
 # you have to define all of these to run these tests. you should use a dummy
 # account and project obviously
@@ -34,7 +35,7 @@ def test_create_list_and_delete_token(tee_capsys):
     with capsys.disabled():
         app.delete_token(token_name)
 
-    app.create_token(project, token_name)
+    app.create_token(token_name, SingleProject(project))
     captured = capsys.readouterr()
     assert "Created token:" in captured.out
     app.list_tokens()
