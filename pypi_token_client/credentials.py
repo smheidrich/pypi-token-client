@@ -6,13 +6,15 @@ from getpass import getpass
 
 import keyring
 
-keyring_service_prefix = "pypi-token-automation"
+keyring_service_prefix = "pypi-token-client-cli"
 
 
 @dataclass
 class PypiCredentials:
     username: str
+    "PyPI username"
     password: str
+    "PyPI password"
 
 
 def make_keyring_service_name(pypi_base_url: str) -> str:

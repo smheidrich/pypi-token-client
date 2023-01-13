@@ -227,6 +227,16 @@ class AsyncPypiTokenClientSession:
 
     @_with_lock
     async def create_token(self, name: str, scope: TokenScope) -> str:
+        """
+        Create a new token on PyPI.
+
+        Args:
+            name: Name of the token to create.
+            scope: The token's desired scope.
+
+        Returns:
+            The created token.
+        """
         # validate & extract from args
         if isinstance(scope, AllProjects):
             scope_selector_value = "scope:user"
@@ -284,7 +294,7 @@ class AsyncPypiTokenClientSession:
         Log into PyPI if necessary.
 
         Normally, this does not need to be called explicitly as all other
-        functions of this class perform logins automatically.
+        methods in this class perform logins automatically.
 
         One use case for this is to find out whether the given credentials are
         correct without doing anything else. It should however be noted that an
@@ -305,6 +315,12 @@ class AsyncPypiTokenClientSession:
 
     @_with_lock
     async def get_token_list(self) -> Sequence[TokenListEntry]:
+        """
+        Get list of tokens for the logged-in account on PyPI.
+
+        Returns:
+            List of tokens.
+        """
         await self.page.goto(
             self.base_url + "/manage/account/",
             wait_until="domcontentloaded",
@@ -346,6 +362,12 @@ class AsyncPypiTokenClientSession:
 
     @_with_lock
     async def delete_token(self, name: str):
+        """
+        Delete token on PyPI.
+
+        Args:
+            name: Name of the token to delete.
+        """
         await self.page.goto(
             self.base_url + "/manage/account/",
             wait_until="domcontentloaded",

@@ -33,10 +33,6 @@ class TooManyAttemptsError(LoginError):
     pass
 
 
-class CreateTokenError(Exception):
-    pass
-
-
 class TokenNameError(Exception):
     pass
 
@@ -54,6 +50,7 @@ class AllProjects(TokenScope):
 @dataclass
 class SingleProject(TokenScope):
     name: str
+    "Name of the project for which this token should be valid"
 
 
 @dataclass
