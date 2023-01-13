@@ -69,6 +69,7 @@ from pypi_token_client import (
 )
 
 credentials = PypiCredentials(getenv("PYPI_USER"), getenv("PYPI_PASS"))
+assert credentials.username and credentials.password
 
 async def main() -> str:
   async with async_pypi_token_client(credentials) as session:

@@ -14,6 +14,7 @@ client to create a new token on PyPI:
     )
 
     credentials = PypiCredentials(getenv("PYPI_USER"), getenv("PYPI_PASS"))
+    assert credentials.username and credentials.password
 
     async def main() -> str:
       async with async_pypi_token_client(credentials) as session:
