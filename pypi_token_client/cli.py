@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -113,6 +114,10 @@ def delete(
 
 
 def cli_main():
+    # it seems that there is no way around setting global state with Python's
+    # own logging module, so setting this up is done in the outermost layer
+    # here (=> everything inside has no global state mutations)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     cli_app()
 
 
