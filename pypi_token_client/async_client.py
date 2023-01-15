@@ -4,6 +4,7 @@
 from asyncio import Lock
 from contextlib import asynccontextmanager
 from functools import wraps
+from logging import Logger, getLogger
 from pathlib import Path
 from typing import AsyncIterator, Sequence
 
@@ -26,6 +27,8 @@ from .credentials import PypiCredentials
 from .utils.playwright import launch_ephemeral_chromium_context
 from .utils.sequences import one_or_none
 
+default_logger = getLogger(__name__)
+
 
 def _expect_page(page, expected_url: str):
     if page.url != expected_url:
@@ -40,6 +43,7 @@ async def async_pypi_token_client(
     headless: bool = False,
     persist_to: Path | str | None = None,
     base_url: str = "https://pypi.org",
+    logger: Logger = default_logger,
 ) -> AsyncIterator["AsyncPypiTokenClientSession"]:
     """
     Context manager for launching an async client session.
@@ -52,6 +56,7 @@ async def async_pypi_token_client(
         persist_to: Directory in which to persist the browser state. ``None``
             means no persistence.
         base_url: PyPI base URL.
+        logger: Logger to log messages to.
 
     Returns:
       A context manager for the async session.
@@ -69,7 +74,7 @@ async def async_pypi_token_client(
         assert len(pages) == 1
         page = pages[0]
         yield AsyncPypiTokenClientSession(
-            context, page, credentials, headless, base_url
+            context, page, credentials, headless, base_url, logger
         )
 
 
@@ -103,12 +108,14 @@ class AsyncPypiTokenClientSession:
         credentials: PypiCredentials,
         headless: bool = True,
         base_url: str = "https://pypi.org",
+        logger: Logger = default_logger,
     ):
         self.context = context
         self.page = page
         self.credentials = credentials
         self.headless = headless
         self.base_url = base_url
+        self.logger = logger
         self._lock = Lock()
 
     async def _get_logged_in_user(self) -> str | None:
@@ -133,7 +140,7 @@ class AsyncPypiTokenClientSession:
         logged_in_user = await self._get_logged_in_user()
         if logged_in_user is not None:
             if logged_in_user == self.credentials.username:
-                print("no login required")
+                self.logger.info("no login required")
                 return False
             else:
                 # TODO log out & go to login page
@@ -145,7 +152,7 @@ class AsyncPypiTokenClientSession:
         if not self.page.url.startswith(
             self.base_url.rstrip("/") + "/account/login/"
         ):
-            print("no login required")
+            self.logger.info("no login required")
             return False
         username_input = one_or_none(
             await self.page.locator("#username").all()
@@ -166,7 +173,7 @@ class AsyncPypiTokenClientSession:
         async with self.page.expect_event(
             "domcontentloaded"
         ), self.page.expect_navigation():
-            print("logging in...")
+            self.logger.info("logging in...")
             await password_input.press("Enter")
         if self.page.url.startswith(
             self.base_url.rstrip("/") + "/account/login/"
@@ -201,7 +208,7 @@ class AsyncPypiTokenClientSession:
             await self.page.get_by_text("Confirm password to continue").all()
         )
         if not confirm_heading:
-            print("no password confirmation required")
+            self.logger.info("no password confirmation required")
             return
         password_input = one_or_none(
             await self.page.locator("#password").all()
@@ -213,7 +220,7 @@ class AsyncPypiTokenClientSession:
         async with self.page.expect_event(
             "domcontentloaded"
         ), self.page.expect_navigation():
-            print("confirming password...")
+            self.logger.info("confirming password...")
             await password_input.press("Enter")
 
     async def wait_until_closed(self):
@@ -268,7 +275,7 @@ class AsyncPypiTokenClientSession:
         async with self.page.expect_event(
             "domcontentloaded"
         ), self.page.expect_navigation():
-            print(f"creating token {name!r}...")
+            self.logger.info(f"creating token {name!r}...")
             await name_input.press("Enter")
         name_errors_or_none = one_or_none(
             await self.page.locator("#token-name-errors ul li").all()
@@ -417,13 +424,13 @@ class AsyncPypiTokenClientSession:
             async with self.page.expect_event(
                 "domcontentloaded"
             ), self.page.expect_navigation():
-                print(f"deleting token {name!r}...")
+                self.logger.info(f"deleting token {name!r}...")
                 await password_input.press("Enter")
             await self.page.get_by_text("Deleted API token").wait_for(
                 state="visible", timeout=5000
             )
-            print(f"deleted token {name!r}")
+            self.logger.info(f"deleted token {name!r}")
             return
         else:
-            print(f"no token named {name} found. nothing to do")
+            self.logger.info(f"no token named {name} found. nothing to do")
             return
