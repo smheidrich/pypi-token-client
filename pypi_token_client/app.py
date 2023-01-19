@@ -33,7 +33,7 @@ class App:
         self.pypi_base_url = pypi_base_url
 
     @asynccontextmanager
-    async def _logged_in_session(
+    async def _logged_in_error_handling_session(
         self,
     ) -> AsyncIterator[AsyncPypiTokenClientSession]:
         # don't do anything interactive (e.g. ask about saving to keyring or
@@ -48,7 +48,7 @@ class App:
         )
         async with async_pypi_token_client(
             credentials, self.headless, self.persist_to, self.pypi_base_url
-        ) as session:
+        ) as session, self._handle_errors(session):
             for attempt in count():
                 try:
                     did_login = await session.login()
@@ -94,15 +94,6 @@ class App:
                 )
                 await session.wait_until_closed()
             exit(1)
-
-    @asynccontextmanager
-    async def _logged_in_error_handling_session(
-        self,
-    ) -> AsyncIterator[AsyncPypiTokenClientSession]:
-        async with self._logged_in_session() as session, self._handle_errors(
-            session
-        ):
-            yield session
 
     def create_token(self, token_name: str, scope: TokenScope) -> None:
         async def _run():
